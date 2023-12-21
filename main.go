@@ -122,7 +122,7 @@ func main() {
 	var pow int
 	fmt.Println("Enter power of polynomial: ")
 	fmt.Scan(&pow)
-	g := NewGame(screenWidth, screenHeight, p, pow)
+	g := NewGame(screenWidth, screenHeight, p, pow+1)
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
