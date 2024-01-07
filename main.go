@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"log"
+	"math"
 	"math/rand"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -18,6 +20,7 @@ const (
 	screenWidth, screenHeight                    = 1800, 1080
 	plotMinX, plotMaxX, plotMinY, plotMaxY       = 0, 10, 0, 100 // Min and Max data values along both axis
 	pointMinYOffset, pointMaxYOffset, pointCount = -20, 20, 10
+	power                                        = 5 // The power of polynomial to appriximate with
 )
 
 func f(x float64) float64 { return x * x } // Function to spawn points along
@@ -32,14 +35,17 @@ func main() {
 }
 
 type game struct {
-	points  plotter.XYs
-	NewPlot func() *plot.Plot
-	plot    *plot.Plot
+	points                plotter.XYs
+	approximatingFunction func(float64) float64
+	NewPlot               func() *plot.Plot
+	plot                  *plot.Plot
 }
 
 func NewGame() *game {
+	points := GetRandPoints(f, pointMinYOffset, pointMaxYOffset, pointCount)
 	return &game{
-		GetRandPoints(f, pointMinYOffset, pointMaxYOffset, pointCount),
+		points,
+		Approximate(points),
 		func() *plot.Plot {
 			p := plot.New()
 			p.X.Min = plotMinX
@@ -69,6 +75,10 @@ func (g *game) Update() error {
 	original.Color = color.RGBA{100, 100, 100, 255}
 	original.Dashes = []vg.Length{vg.Points(2), vg.Points(2)}
 	g.plot.Add(original)
+
+	approximating := plotter.NewFunction(g.approximatingFunction)
+	approximating.Color = color.RGBA{255, 255, 255, 255}
+	g.plot.Add(approximating)
 
 	return nil
 }
@@ -100,19 +110,66 @@ func DrawPlot(screen *ebiten.Image, p *plot.Plot) {
 
 // Returns approximating linear function
 func Approximate(points plotter.XYs) func(float64) float64 {
-	var sx, sxx, sy, sxy float64
-	n := float64(points.Len())
-	for _, p := range points {
-		sx, sxx, sy, sxy = sx+p.X, sxx+p.X*p.X, sy+p.Y, sxy+p.X*p.Y
+	// 1. Compose the matrix
+	// 2. Solve the matrix using Gaussian Elimination
+	var sxx, sx, sy, sxy float64
+	n := points.Len()
+	for i := 0; i < n; i++ {
+		x, y := points[i].X, points[i].Y
+		sxx += x * x
+		sx += x
+		sy += y
+		sxy += x * y
 	}
-	a := (n*sxy - sx*sy) / (n*sxx - sx*sx)
-	return func(x float64) float64 {
-		return a*x + (sy-a*sx)/n
+
+	coefs := gauss([][]float64{{sxx, sx, sxy}, {sx, float64(n), sy}})
+	l := len(coefs)
+
+	// Remove
+	fmt.Print("Approximating function: ")
+	for i, c := range coefs {
+		fmt.Printf("%vx^%v", c, l-i-1.)
+	}
+	fmt.Println()
+	// Remove
+	return func(x float64) (res float64) {
+		for i, c := range coefs {
+			res += c * math.Pow(x, float64(l-i-1))
+		}
+		return res
 	}
 }
 
-// The task:
-// 1. Generate random points along some function
-// Game struct contains function to draw points along, Max and min Y offset, point count, power of polynomial to approximate with
-// 2. Calculate coeffecients of the approximating polynomial
-// 3. Solve system of equations using Gaussian Elimination
+// Solves system of linear equations written in the matrix form in the row-major order
+// and with output vector put to the right side of matrix
+// Returns coeffecients from top to bottom(x, y, z ...)// Solves system of linear equations written in the matrix form
+// https://github.com/34thSchool/numeric-methods-2
+func gauss(A [][]float64) []float64 {
+	n := len(A)
+	// 1. Finding a row with in eliminated coefficient
+	for i := 0; i < n; i++ {
+		if A[i][0] != 0 {
+			A[0], A[i] = A[i], A[0]
+			break
+		}
+	}
+	// 2. Eliminating
+	for j := 0; j < n-1; j++ { // Columns
+		for i := j + 1; i < n; i++ { // Rows
+			c := A[i][j] / A[j][j]    // Subtrahend column multiplier
+			for k := j; k <= n; k++ { // Columns
+				A[i][k] -= c * A[j][k] // Elimination
+			}
+		}
+	}
+	// 3. Solving
+	res := make([]float64, len(A))
+	for i := n - 1; i >= 0; i-- { // Rows
+		res[i] = A[i][n]
+		for j := i + 1; j < n; j++ {
+			res[i] -= A[i][j] * res[j]
+		}
+		res[i] /= A[i][i]
+	}
+	return res
+}
