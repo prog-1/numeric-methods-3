@@ -9,22 +9,24 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
 	"gonum.org/v1/plot/vg/vgimg"
 )
 
 const (
-	screenWidth, screenHeight = 1800, 1080
-	xMin, xMax, yMin, yMax    = 0, 10, 0, 100 // Min and Max data values along both axis
+	screenWidth, screenHeight                    = 1800, 1080
+	plotMinX, plotMaxX, plotMinY, plotMaxY       = 0, 10, 0, 100 // Min and Max data values along both axis
+	pointMinYOffset, pointMaxYOffset, pointCount = -20, 20, 10
 )
+
+func f(x float64) float64 { return x * x } // Function to spawn points along
 
 func main() {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Approximator")
 
-	g := NewGame(GetRandPoints(func(x float64) float64 { return (x * x) }, -20, 20, 10))
-
-	if err := ebiten.RunGame(g); err != nil {
+	if err := ebiten.RunGame(NewGame()); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -35,15 +37,15 @@ type game struct {
 	plot    *plot.Plot
 }
 
-func NewGame(points plotter.XYs) *game {
+func NewGame() *game {
 	return &game{
-		points,
+		GetRandPoints(f, pointMinYOffset, pointMaxYOffset, pointCount),
 		func() *plot.Plot {
 			p := plot.New()
-			p.X.Min = xMin
-			p.X.Max = xMax
-			p.Y.Min = yMin
-			p.Y.Max = yMax
+			p.X.Min = plotMinX
+			p.X.Max = plotMaxX
+			p.Y.Min = plotMinY
+			p.Y.Max = plotMaxY
 
 			p.BackgroundColor = color.Black
 			return p
@@ -63,9 +65,10 @@ func (g *game) Update() error {
 	s.Color = color.RGBA{255, 0, 0, 255}
 	g.plot.Add(s)
 
-	// f := plotter.NewFunction(Approximate(g.points))
-	// f.Color = color.RGBA{255, 255, 255, 255}
-	// g.plot.Add(f)
+	original := plotter.NewFunction(f)
+	original.Color = color.RGBA{100, 100, 100, 255}
+	original.Dashes = []vg.Length{vg.Points(2), vg.Points(2)}
+	g.plot.Add(original)
 
 	return nil
 }
@@ -79,7 +82,7 @@ func GetRandPoints(f func(float64) float64, minYoffset float64, maxYoffset float
 	// 2. Getting function value(Y)
 	// 3. Applying offset to Y
 	for i := uint(0); i < pointCount; i++ {
-		x := xMin + rand.Float64()*(xMax-xMin) // Random argument within visible range
+		x := plotMinX + rand.Float64()*(plotMaxX-plotMinX) // Random argument within visible range
 		yOffset := minYoffset + rand.Float64()*(maxYoffset-minYoffset)
 		p = append(p, plotter.XY{x, f(x) + yOffset})
 	}
