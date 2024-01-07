@@ -20,7 +20,7 @@ const (
 	screenWidth, screenHeight                    = 1800, 1080
 	plotMinX, plotMaxX, plotMinY, plotMaxY       = 0, 10, 0, 100 // Min and Max data values along both axis
 	pointMinYOffset, pointMaxYOffset, pointCount = -20, 20, 10
-	power                                        = 5 // The power of polynomial to appriximate with
+	power                                        = 1 // The power of polynomial to appriximate with
 )
 
 func f(x float64) float64 { return x * x } // Function to spawn points along
@@ -111,27 +111,48 @@ func DrawPlot(screen *ebiten.Image, p *plot.Plot) {
 // Returns approximating linear function
 func Approximate(points plotter.XYs) func(float64) float64 {
 	// 1. Compose the matrix
-	// 2. Solve the matrix using Gaussian Elimination
-	var sxx, sx, sy, sxy float64
-	n := points.Len()
-	for i := 0; i < n; i++ {
-		x, y := points[i].X, points[i].Y
-		sxx += x * x
-		sx += x
-		sy += y
-		sxy += x * y
+	// 1.1. Get the size of a matrix
+	// 1.2.
+	// 2. Solve the matrix using Gaussian Elimination Check
+
+	// Composing the matrix
+	A := make([][]float64, power+1) // Rows
+	for i := 0; i < len(A); i++ {
+		A[i] = make([]float64, power+2) // Columns
+		// Matrix vectors
+		for j := 0; j < len(A[i])-1; j++ {
+			for k := 0; k < points.Len(); k++ {
+				A[i][j] += math.Pow(points[k].X, float64(power)*2-float64(j+i))
+			}
+		}
+		// Output vector
+		for k := 0; k < points.Len(); k++ {
+			A[i][power+1] = points[k].Y * math.Pow(points[k].X, float64(power-k))
+		}
 	}
 
-	coefs := gauss([][]float64{{sxx, sx, sxy}, {sx, float64(n), sy}})
+	// n := points.Len()
+	// var sxx, sx, sy, sxy float64
+	// for i := 0; i < n; i++ {
+	// 	x, y := points[i].X, points[i].Y
+	// 	sxx += x * x
+	// 	sx += x
+	// 	sy += y
+	// 	sxy += x * y
+	// }
+
+	// Calculating coefecients
+	coefs := gauss(A)
 	l := len(coefs)
 
-	// Remove
+	// Printing approximating function
 	fmt.Print("Approximating function: ")
 	for i, c := range coefs {
-		fmt.Printf("%vx^%v", c, l-i-1.)
+		fmt.Printf("%vx^%v + ", c, l-i-1.)
 	}
 	fmt.Println()
-	// Remove
+
+	// Returning approximating function
 	return func(x float64) (res float64) {
 		for i, c := range coefs {
 			res += c * math.Pow(x, float64(l-i-1))
